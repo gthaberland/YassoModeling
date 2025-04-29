@@ -49,18 +49,18 @@ library(Matrix)
 # Function definition   FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 
 # The input for this function is provided as vectors, row = year
-
-MeanTemperature = 20
-TemperatureAmplitude = 5
-Precipitation = 0.6
-InitialCPool = InitialCPool_load
-LitterInput = input_data[i,]$BR2_7_tha_diff
+N=50
+MeanTemperature = rep(20, N)
+TemperatureAmplitude = rep(5, N)
+Precipitation = rep(0.6, N)
+InitialCPool = c(0,0,0,0,0)
+LitterInput = rep(3, N)
 WoodySize = 4.5
 Yasso07Parameters = Yasso07Parameters_load$value
-SimulationTime = 200
+SimulationTime = seq(1:N)
 
-
-yasso07.light = function(MeanTemperature, TemperatureAmplitude, Precipitation, InitialCPool, LitterInput, WoodySize, Yasso07Parameters, SimulationTime) {
+# this function modifies the initial yasso07.light to run iteratively for each time step
+yasso07.iterative = function(MeanTemperature, TemperatureAmplitude, Precipitation, InitialCPool, LitterInput, WoodySize, Yasso07Parameters, SimulationTime) {
       
       # Ensure input sequences are of the same length
       if (length(MeanTemperature) != length(SimulationTime) ||
@@ -72,7 +72,11 @@ yasso07.light = function(MeanTemperature, TemperatureAmplitude, Precipitation, I
       
       PA = Yasso07Parameters
       WS = WoodySize
-      LC_sequence = list()
+      num_compartments = length(InitialCPool)
+      num_time_points = length(SimulationTime)
+      
+      # Initialize a 3-dimensional array to store the results
+      LC_array = array(0, dim = c(num_compartments, num_time_points))
       
       for (i in seq_along(SimulationTime)) {
             MT = MeanTemperature[i]
@@ -117,10 +121,11 @@ yasso07.light = function(MeanTemperature, TemperatureAmplitude, Precipitation, I
             A = p %*% diag(k)  # Matrix multiplication in R: %*%
             
             # Analytical solution as in Eq. 1.3 in model description
-            LC = as.array(solve(A) %*% (expm(A * TI) %*% (A %*% InitialCPool + LI) - LI))
+            LC = solve(A) %*% (expm(A * TI) %*% (A %*% InitialCPool + LI) - LI)
             
-            LC_sequence[[as.character(TI)]] = LC
+            # Store the result in the 3-dimensional array
+            LC_array[, i] = as.vector(LC)
       }
       
-      return(LC_sequence)
+      return(LC_array)
 }
