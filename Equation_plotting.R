@@ -112,3 +112,18 @@ plot(PR_seq, moisture(PR = PR_seq), type = "l", col = "blue", lwd = 2,
 dev.off()
 
 
+
+
+# plot the size scling, applied only to AWEN and not H pool
+
+#(1 + delta1 * WS + delta2 * (WS^2))^(r), k[5]
+
+delta1 = Yasso07Parameters_load$value[39]
+delta2 = Yasso07Parameters_load$value[40]
+r = Yasso07Parameters_load$value[41]
+
+
+size <- function(WS) {
+   (1 + delta1 * WS + delta2 * (WS^2))^(r)
+   }
+
