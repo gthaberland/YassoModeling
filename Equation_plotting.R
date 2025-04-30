@@ -55,7 +55,7 @@ Temperature_function = function(MT, TA, beta1, beta2) {
                
                
 # Create the grid of MT and TA values
-MT_values <- seq(0, 20, length.out = 100)
+MT_values <- seq(0, 40, length.out = 100)
 TA_values <- seq(5, 15, length.out = 100)
 
 T_response_matrix  = Temperature_function(MT_values, TA_values, beta1, beta2)
@@ -104,7 +104,7 @@ moisture <- function(PR) {
 
 
 png("./study_functions/Moisture_function_plot.png", width = 800, height = 600, res = 100)
-PR_seq = seq(0, 800, length.out = 100)
+PR_seq = seq(0, 2000, length.out = 100)
 plot(PR_seq, moisture(PR = PR_seq), type = "l", col = "blue", lwd = 2,
      xlab = "Precipitation (mm)", ylab = "response moisture",
      main = "Moisture response function"
