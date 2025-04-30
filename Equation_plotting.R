@@ -83,7 +83,7 @@ filled.contour(
             cex.main = 1.5,
             cex.lab = 1.2
       ),
-      key.title = title(main = "Response Value", cex.main = 1),
+      key.title = title(main = "response temperature", cex.main = 1),
       plot.axes = {
             axis(1, cex.axis = 1.1)
             axis(2, cex.axis = 1.1)
@@ -106,7 +106,7 @@ moisture <- function(PR) {
 png("./study_functions/Moisture_function_plot.png", width = 800, height = 600, res = 100)
 PR_seq = seq(0, 800, length.out = 100)
 plot(PR_seq, moisture(PR = PR_seq), type = "l", col = "blue", lwd = 2,
-     xlab = "Precipitation (mm)", ylab = "Moisture Content",
+     xlab = "Precipitation (mm)", ylab = "response moisture",
      main = "Moisture response function"
 )
 dev.off()
@@ -122,8 +122,14 @@ delta1 = Yasso07Parameters_load$value[39]
 delta2 = Yasso07Parameters_load$value[40]
 r = Yasso07Parameters_load$value[41]
 
-
 size <- function(WS) {
    (1 + delta1 * WS + delta2 * (WS^2))^(r)
    }
 
+png("./study_functions/Size_function_plot.png", width = 800, height = 600, res = 100)
+WS_seq = seq(0, 50, length.out = 100)
+plot(WS_seq, size(WS = WS_seq), type = "l", col = "red", lwd = 2,
+     xlab = "Diameter (cm)", ylab = "Response size",
+     main = "Size response function"
+)
+dev.off()
