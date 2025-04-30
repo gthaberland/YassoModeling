@@ -97,7 +97,7 @@ yasso07.iterative = function(MeanTemperature, TemperatureAmplitude, Precipitatio
             
             p = matrix(c(row1, row2, row3, row4, row5), 5, 5, byrow = TRUE)
             
-            # Temperature dependence parameters
+            # Temperature and moisture dependence parameters
             beta1 = PA[17]
             beta2 = PA[18]
             gamma = PA[26]
