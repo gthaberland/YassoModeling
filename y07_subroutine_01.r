@@ -50,77 +50,91 @@ library(Matrix)
 
 # The input for this function is provided as vectors, row = year
 
-MeanTemperature = 20
-TemperatureAmplitude = 5
-Precipitation = 0.6
-InitialCPool = InitialCPool_load
-LitterInput = input_data[i,]$BR2_7_tha_diff
-WoodySize = 4.5
-Yasso07Parameters = Yasso07Parameters_load$value
-SimulationTime = 200
 
 
 yasso07.light = function(MeanTemperature, TemperatureAmplitude, Precipitation, InitialCPool, LitterInput, WoodySize, Yasso07Parameters, SimulationTime) {
+      #Precipitation,...                  % Annual rainfall, mm
+      #    InitialCPool,...                   % AWENH, kg
+      #    LitterInput,...                    % AWENH, kg/a
       
-      # Ensure input sequences are of the same length
-      if (length(MeanTemperature) != length(SimulationTime) ||
-          length(TemperatureAmplitude) != length(SimulationTime) ||
-          length(Precipitation) != length(SimulationTime) ||
-          length(LitterInput) != length(SimulationTime)) {
-            stop("All input sequences must be of the same length.")
-      }
+      MT=MeanTemperature
+      TA=TemperatureAmplitude
+      PR=Precipitation
+      PR=PR/1000;               # conversion from mm to meters
       
-      PA = Yasso07Parameters
-      WS = WoodySize
-      LC_sequence = list()
+      LC=InitialCPool
+      LI=LitterInput
       
-      for (i in seq_along(SimulationTime)) {
-            MT = MeanTemperature[i]
-            TA = TemperatureAmplitude[i]
-            PR = Precipitation[i] / 1000  # conversion from mm to meters
-            LC = InitialCPool
-            LI = LitterInput[i]
-            TI = SimulationTime[i]
-            
-            alfa = c(-PA[1], -PA[2], -PA[3], -PA[4], -PA[35])  # Vector of decomposition rates
-            
-            # Creating the matrix A_p (here called p)
-            row1 = c(-1, PA[5], PA[6], PA[7], 0)
-            row2 = c(PA[8], -1, PA[9], PA[10], 0)
-            row3 = c(PA[11], PA[12], -1, PA[13], 0)
-            row4 = c(PA[14], PA[15], PA[16], -1, 0)
-            row5 = c(PA[36], PA[36], PA[36], PA[36], -1)
-            
-            p = matrix(c(row1, row2, row3, row4, row5), 5, 5, byrow = TRUE)
-            
-            # Temperature dependence parameters
-            beta1 = PA[17]
-            beta2 = PA[18]
-            gamma = PA[26]
-            
-            # Woody litter size dependence parameters
-            delta1 = PA[39]
-            delta2 = PA[40]
-            r = PA[41]
-            
-            T1 = MT + 4 * TA / pi * (1 / sqrt(2) - 1)          # Eq. 2.4 in model description
-            T2 = MT - 4 * TA / (sqrt(2) * pi)                  # Eq. 2.5 in model description
-            T3 = MT + 4 * TA / pi * (1 - 1 / sqrt(2))          # Eq. 2.6 in model description
-            T4 = MT + 4 * TA / (sqrt(2) * pi)                  # Eq. 2.7 in model description
-            
-            # k following Eq. 3 in Tuomi et al. 2009. Eco.Mod. 220: 3362-3371
-            k = alfa * mean(exp(beta1 * c(T1, T2, T3, T4) + beta2 * (c(T1, T2, T3, T4)^2)) * (1 - exp(gamma * PR)))
-            
-            # The effect of wl size as in Eq. 3.1 in model description
-            k = c(k[1:4] * (1 + delta1 * WS + delta2 * (WS^2))^(r), k[5])
-            
-            A = p %*% diag(k)  # Matrix multiplication in R: %*%
-            
-            # Analytical solution as in Eq. 1.3 in model description
-            LC = as.array(solve(A) %*% (expm(A * TI) %*% (A %*% InitialCPool + LI) - LI))
-            
-            LC_sequence[[as.character(TI)]] = LC
-      }
+      PA=Yasso07Parameters
+      WS=WoodySize;              
       
-      return(LC_sequence)
+      TI = SimulationTime
+      
+      alfa=c(-PA[1], -PA[2], -PA[3], -PA[4], -PA[35])   # Vector of decomposition rates
+      
+      # Creating the matrix A_p (here called p)
+      
+      row1 = c(-1, PA[5], PA[6], PA[7], 0)
+      row2 = c(PA[8], -1, PA[9], PA[10], 0)
+      row3 = c(PA[11], PA[12], -1, PA[13], 0)
+      row4 = c(PA[14], PA[15], PA[16], -1, 0)
+      row5 = c(PA[36], PA[36], PA[36], PA[36], -1)
+      
+      p = matrix(c(row1, row2, row3, row4, row5), 5, 5, byrow=T)
+      
+      # temperature dependence parameters
+      beta1 = PA[17]
+      beta2 = PA[18]
+      gamma = PA[26]
+      
+      # Woody litter size dependence parameters
+      delta1 = PA[39]
+      delta2 = PA[40]
+      r = PA[41]
+      
+      T1=MT+4*TA/pi*(1/sqrt(2)-1)          # Eq. 2.4 in model description
+      T2=MT-4*TA/(sqrt(2)*pi)              # Eq. 2.5 in model description
+      T3=MT+4*TA/pi*(1-1/sqrt(2))          # Eq. 2.6 in model description
+      T4=MT+4*TA/(sqrt(2)*pi)              # Eq. 2.7 in model description 
+      
+      # k following Eq. 3 in Tuomi et al. 2009. Eco.Mod. 220: 3362-3371
+      k=alfa*mean(exp(beta1*c(T1,T2,T3,T4)+beta2*(c(T1,T2,T3,T4)^2))*(1-exp(gamma*PR)))     
+      
+      # the effect of wl size as in Eq. 3.1 in model description
+      k = c(k[1:4]*(1+delta1*WS+delta2*(WS^2))^(r),k[5])
+      
+      A=p%*%diag(k)                             # Matrix multiplication in R: %*%
+      
+      #analytical solution as in Eq. 1.3 in model description
+      LC = as.array(solve(A)%*% (expm(A*TI)%*%(A%*%InitialCPool+LI)-LI))
+      
+      LC  # prints this as a result of a function
+      
 }
+
+
+sim_time = seq(from=0, to=200, by=1)
+sim_results = mat.or.vec(5, length(sim_time))
+sim_results <- array(0, dim = c(dim(input_data)[1],5, length(sim_time)))
+str(sim_results)
+
+for(j in 1:dim(input_data)[1]){
+      for(i in 1:length(sim_time)){
+            year = sim_time[i]
+            sim_results[j,,i] = yasso07.light(MeanTemperature = 10,
+                                            TemperatureAmplitude = 5,
+                                            Precipitation = 600,
+                                            InitialCPool = input_data[j,]$BR2_7_tha_diff*c(0.2,0.2,0.2,0.2,0.2),
+                                            LitterInput = c(0,0,0,0,0) ,
+                                            WoodySize = 4.5,
+                                            Yasso07Parameters = Yasso07Parameters_load$value,
+                                            SimulationTime = year)  
+            
+      }
+}
+
+plot_nr = 201
+plot(sim_time, colSums(sim_results[plot_nr,,]), type="l", main=paste("ID:", input_data[plot_nr,]$Id_Inventari, ",",
+                                                                     "species:", input_data[plot_nr,]$Species))
+
+     
