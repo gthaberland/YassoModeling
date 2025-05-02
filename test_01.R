@@ -24,24 +24,54 @@ input_clima = read_excel("../../../2024/Meteo/Historical_meteo/Historical_meteo.
 str(input_clima)
 input_clima$Year <- year(input_clima$dates)
 input_clima$Month <- month(input_clima$dates)
+input_clima$TemperatureAmplitude <- abs(input_clima$MinTemperature - input_clima$MaxTemperature)/2
 names(input_clima)
-input_clima <- input_clima %>%
-      select(2, 8, 12, 23)
 
-na_ids_year_93 <- input_clima %>%
-      filter(is.na(MeanTemperature), Year > 1993) %>%
-      select(Id_Inventari) %>%
+input_clima <- input_clima %>%
+      mutate(Id_Inventari = as.character(Id_Inventari))
+
+input_data <- input_data %>%
+      mutate(Id_Inventari = as.character(Id_Inventari))
+
+# Now do the join
+input_clima <- input_clima %>%
+      left_join(input_data[, c("Id_Inventari", "Inv_Pre_Year")], by = "Id_Inventari")
+
+library(dplyr)
+
+input_clima <- input_clima %>% 
       distinct()
 
-Clima <- input_clima %>%
-      select(Id_Inventari, MeanTemperature, Year) %>%
-      group_by(Id_Inventari, Year) %>%
+climate_summary <- input_clima %>%
+      filter(Year >= Inv_Pre_Year) %>%
+      group_by(Id_Inventari) %>%
       summarise(
-            MeanTemp = round(mean(MeanTemperature, na.rm = TRUE), 2),
-            N = sum(!is.na(MeanTemperature)),  # or N = n() if no NAs
-            .groups = "drop"
+            MeanTemp_avg = round(mean(MeanTemperature, na.rm = TRUE), 2),
+            TempAmp_avg = round(mean(TemperatureAmplitude, na.rm = TRUE), 2),
+            Precip_total = sum(Precipitation, na.rm = TRUE),
+            Years_count = n_distinct(Year),
+            Precip_annual_avg = round(Precip_total / Years_count, 2)
+      ) %>%
+      mutate(
+            MeanTemp_avg = ifelse(is.na(MeanTemp_avg), 10, MeanTemp_avg),
+            TempAmp_avg = ifelse(is.na(TempAmp_avg), 5, TempAmp_avg),
+            Precip_annual_avg = ifelse(is.na(Precip_annual_avg) | Precip_annual_avg == 0, 650, Precip_annual_avg)
+      ) %>%
+      select(-Precip_total)
+
+
+# Join input_data
+input_data <- climate_summary %>%
+      left_join(input_data, by = "Id_Inventari") %>%
+      filter(
+            !is.na(BR7_tha_diff) & !is.na(BR2_7_tha_diff) & !is.na(BR2_tha_diff),  # Remove rows with any NA
+            (BR7_tha_diff + BR2_7_tha_diff + BR2_tha_diff) != 0                    # Remove rows where the sum is 0
       )
 
+# save
+saveRDS(input_data, "/../../../DB_processades_rds/DB_allometrics.rds")
+
+rm(input_clima, input_data)
 
 
       # draft of a nested loop

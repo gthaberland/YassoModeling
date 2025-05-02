@@ -113,7 +113,7 @@ yasso07.light = function(MeanTemperature, TemperatureAmplitude, Precipitation, I
 }
 
 
-sim_time = seq(from=0, to=200, by=1)
+sim_time = seq(from=0, to=20, by=1)
 sim_results = mat.or.vec(5, length(sim_time))
 sim_results <- array(0, dim = c(dim(input_data)[1],5, length(sim_time)))
 str(sim_results)
@@ -121,9 +121,9 @@ str(sim_results)
 for(j in 1:dim(input_data)[1]){
       for(i in 1:length(sim_time)){
             year = sim_time[i]
-            sim_results[j,,i] = yasso07.light(MeanTemperature = 10,
-                                            TemperatureAmplitude = 5,
-                                            Precipitation = 600,
+            sim_results[j,,i] = yasso07.light(MeanTemperature = input_data[j, ]$MeanTemp_avg,
+                                            TemperatureAmplitude = input_data[j, ]$TempAmp_avg,
+                                            Precipitation = input_data[j, ]$Precip_annual_avg,
                                             InitialCPool = input_data[j,]$BR2_7_tha_diff*c(0.2,0.2,0.2,0.2,0.2),
                                             LitterInput = c(0,0,0,0,0) ,
                                             WoodySize = 4.5,
@@ -133,8 +133,36 @@ for(j in 1:dim(input_data)[1]){
       }
 }
 
-plot_nr = 201
+plot_nr = 3
 plot(sim_time, colSums(sim_results[plot_nr,,]), type="l", main=paste("ID:", input_data[plot_nr,]$Id_Inventari, ",",
                                                                      "species:", input_data[plot_nr,]$Species))
 
-     
+for(j in 1:dim(input_data)[1]){
+      for(i in 1:length(sim_time)){
+            year = sim_time[i]
+            sim_results[j,,i] = yasso07.light(MeanTemperature = input_data[j, ]$MeanTemp_avg,
+                                              TemperatureAmplitude = input_data[j, ]$TempAmp_avg,
+                                              Precipitation = input_data[j, ]$Precip_annual_avg,
+                                              InitialCPool = input_data[j,]$BR7_tha_diff*c(0.2,0.2,0.2,0.2,0.2),
+                                              LitterInput = c(0,0,0,0,0) ,
+                                              WoodySize = 10,
+                                              Yasso07Parameters = Yasso07Parameters_load$value,
+                                              SimulationTime = year)  
+            
+      }
+}
+ 
+for(j in 1:dim(input_data)[1]){
+      for(i in 1:length(sim_time)){
+            year = sim_time[i]
+            sim_results[j,,i] = yasso07.light(MeanTemperature = input_data[j, ]$MeanTemp_avg,
+                                              TemperatureAmplitude = input_data[j, ]$TempAmp_avg,
+                                              Precipitation = input_data[j, ]$Precip_annual_avg,
+                                              InitialCPool = input_data[j,]$BR2_tha_diff*c(0.2,0.2,0.2,0.2,0.2),
+                                              LitterInput = c(0,0,0,0,0) ,
+                                              WoodySize = 1,
+                                              Yasso07Parameters = Yasso07Parameters_load$value,
+                                              SimulationTime = year)  
+            
+      }
+}    
