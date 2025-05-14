@@ -228,74 +228,136 @@ print(paste("Woody Size (WS): ", cfg$size))
 
 
 # Number of years to simulate
-simulation_years <- 20
+simulation_years <- 50
 
 # Create an empty list to store results
 results_list <- list()
 
-# Loop through input_data
+# Vector of wood sizes and corresponding column names
+wood_sizes <- list(
+      `0` = "BR2_tha_diff",
+      `4` = "BR2_7_tha_diff",
+      `10` = "BR7_tha_diff"
+)
+
 for (j in 1:nrow(input_data)) {
-      
       row_data <- input_data[j, ]
       
-      # Determine the wood size and corresponding biomass
-      if (!is.na(row_data$BR2_tha_diff)) {
-            ws_size <- 0
-            biomass <- row_data$BR2_tha_diff
-      } else if (!is.na(row_data$BR2_7_tha_diff)) {
-            ws_size <- 4
-            biomass <- row_data$BR2_7_tha_diff
-      } else if (!is.na(row_data$BR7_tha_diff)) {
-            ws_size <- 10
-            biomass <- row_data$BR7_tha_diff
-      } else {
-            next  # Skip if no biomass data
+      for (ws_size in names(wood_sizes)) {
+            col_name <- wood_sizes[[ws_size]]
+            biomass <- row_data[[col_name]]
+            
+            if (is.na(biomass)) next  # Skip if no biomass for this wood size
+            
+            ws_size <- as.numeric(ws_size)
+            
+            # Get species-specific carbon shares for this wood size
+            species_row <- unique_species[
+                  unique_species$Species == row_data$Species & unique_species$WS == ws_size, 
+            ]
+            
+            if (nrow(species_row) == 0) next
+            
+            # Extract carbon share values
+            carbon_shares <- as.numeric(species_row[1, c("C1", "C2", "C3", "C4", "C5")])
+            
+            # Build LitterInput: only year 0 has input
+            litter_input <- matrix(0, nrow = simulation_years +1, ncol = 5)
+            litter_input[1, ] <- biomass * carbon_shares
+            
+            # Climate variables
+            MeanTemperature <- rep(row_data$MeanTemp_avg, simulation_years)
+            TemperatureAmplitude <- rep(row_data$TempAmp_avg/2, simulation_years)
+            Precipitation <- rep(row_data$Precip_annual_avg, simulation_years)
+            
+            # Run the Yasso model
+            out <- yasso07(
+                  MeanTemperature = MeanTemperature,
+                  TemperatureAmplitude = TemperatureAmplitude,
+                  Precipitation = Precipitation,
+                  InitialCPool = rep(0, 5),
+                  LitterInput = litter_input,
+                  WoodySize = ws_size,
+                  Yasso07Parameters = Yasso07Parameters_load$value
+            )
+            
+            results_list[[length(results_list) + 1]] <- data.frame(
+                  Id_Inventari = rep(row_data$Id_Inventari, 51),
+                  Species = rep(row_data$Species, 51),
+                  WoodySize = rep(ws_size, 51),
+                  Year = 0:50,  # 21 years: 0 to 20
+                  C_A = out[, 1],
+                  C_W = out[, 2],
+                  C_E = out[, 3],
+                  C_N = out[, 4],
+                  C_H = out[, 5],
+                  TotalC = rowSums(out)
+            )
+            
       }
-      
-      # Get species-specific carbon shares for this wood size
-      species_row <- unique_species[
-            unique_species$Species == row_data$Species & unique_species$WS == ws_size, 
-      ]
-      
-      if (nrow(species_row) == 0) next
-      
-      # Extract carbon share values and ensure they are numeric
-      carbon_shares <- as.numeric(species_row[1, c("C1", "C2", "C3", "C4", "C5")])
-      
-      # Build LitterInput: only year 0 has input
-      litter_input <- matrix(0, nrow = simulation_years +1, ncol = 5)
-      litter_input[1, ] <- biomass * carbon_shares  # kg/ha per year for year 0
-      
-      # Replicate climate variables for all years (no litter input in year 1+)
-      MeanTemperature <- rep(row_data$MeanTemp_avg, simulation_years)
-      TemperatureAmplitude <- rep(row_data$TempAmp_avg, simulation_years)
-      Precipitation <- rep(row_data$Precip_annual_avg, simulation_years)
-      
-      # Run the Yasso model
-      out <- yasso07(
-            MeanTemperature = MeanTemperature,
-            TemperatureAmplitude = TemperatureAmplitude,
-            Precipitation = Precipitation,
-            InitialCPool = rep(0, 5),
-            LitterInput = litter_input,
-            WoodySize = ws_size,
-            Yasso07Parameters = Yasso07Parameters_load$value
-      )
-      
-      # Store results with corrected Year range
-      results_list[[length(results_list) +1]] <- data.frame(
-            Id_Inventari = row_data$Id_Inventari,
-            Species = row_data$Species,
-            WoodySize = ws_size,
-            Year = 0:simulation_years,  # Adjusted to start from 0
-            C_A = out[, 1],
-            C_W = out[, 2],
-            C_E = out[, 3],
-            C_N = out[, 4],
-            C_H = out[, 5],
-            TotalC = rowSums(out)
-      )
 }
+
 
 # Combine all into a single data frame
 model_outputs <- bind_rows(results_list)
+
+# Ploting results
+
+plot(rowSums(out), type="l", col="darkgreen", 
+     ylab="Carbon Mg/ha", xlab="Years", xlim=c(0,50), #ylim=c(0,60), 
+     bty="n")
+
+library(ggplot2)
+
+model_outputs %>%
+      group_by(Year) %>%
+      summarise(TotalCarbon = sum(TotalC, na.rm = TRUE)) %>%
+      ggplot(aes(x = Year, y = TotalCarbon)) +
+      geom_line(color = "darkgreen") +
+      labs(y = "Total Carbon Mg/ha", x = "Years") +
+      theme_minimal()
+
+model_outputs %>%
+  group_by(Year) %>%
+  summarise(
+    C_A = sum(C_A, na.rm = TRUE),
+    C_W = sum(C_W, na.rm = TRUE),
+    C_E = sum(C_E, na.rm = TRUE),
+    C_N = sum(C_N, na.rm = TRUE),
+    C_H = sum(C_H, na.rm = TRUE)
+  ) %>%
+  pivot_longer(cols = starts_with("C_"), names_to = "Pool", values_to = "Carbon") %>%
+  ggplot(aes(x = Year, y = Carbon, color = Pool)) +
+  geom_line() +
+  labs(y = "Carbon Mg/ha", x = "Years", color = "Pool") +
+  theme_minimal()
+
+
+library(patchwork)  # Install if needed: install.packages("patchwork")
+
+# Function to generate the plot for one species
+plot_species_pools <- function(species_name) {
+      model_outputs %>%
+            filter(Species == species_name) %>%
+            group_by(Year) %>%
+            summarise(
+                  C_A = sum(C_A, na.rm = TRUE),
+                  C_W = sum(C_W, na.rm = TRUE),
+                  C_E = sum(C_E, na.rm = TRUE),
+                  C_N = sum(C_N, na.rm = TRUE),
+                  C_H = sum(C_H, na.rm = TRUE)
+            ) %>%
+            pivot_longer(cols = starts_with("C_"), names_to = "Pool", values_to = "Carbon") %>%
+            mutate(Pool = factor(Pool, levels = c("C_A", "C_W", "C_E", "C_N", "C_H"))) %>%
+            ggplot(aes(x = Year, y = Carbon, color = Pool)) +
+            geom_line() +
+            labs(title = species_name, y = "Carbon Mg/ha", x = "Years", color = "Pool") +
+            theme_minimal()
+}
+
+# Generate plots for both species
+p1 <- plot_species_pools("Pinus halepensis")
+p2 <- plot_species_pools("Quercus ilex")
+
+# Combine in 2-row layout
+p1 / p2

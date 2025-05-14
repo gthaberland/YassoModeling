@@ -82,3 +82,7 @@ names(input_data)
 
 # Biochemical per species and wood size
 unique_species <- read_excel("../../../2025/Exchange period - Finland/YassoModeling/unique_species.xlsx")
+
+
+saveRDS(unique_species,"../../../2025/Exchange period - Finland/YassoModeling/unique_species.rds")
+saveRDS(input_data,"../../../2025/Exchange period - Finland/YassoModeling/input_data.rds")
