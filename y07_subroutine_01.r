@@ -133,7 +133,7 @@ for(j in 1:dim(input_data)[1]){
       }
 }
 
-plot_nr = 3
+plot_nr = 10
 plot(sim_time, colSums(sim_results[plot_nr,,]), type="l", main=paste("ID:", input_data[plot_nr,]$Id_Inventari, ",",
                                                                      "species:", input_data[plot_nr,]$Species))
 
@@ -151,6 +151,10 @@ for(j in 1:dim(input_data)[1]){
             
       }
 }
+
+plot_nr = 10
+plot(sim_time, colSums(sim_results[plot_nr,,]), type="l", main=paste("ID:", input_data[plot_nr,]$Id_Inventari, ",",
+                                                                     "species:", input_data[plot_nr,]$Species))
  
 for(j in 1:dim(input_data)[1]){
       for(i in 1:length(sim_time)){
@@ -166,3 +170,7 @@ for(j in 1:dim(input_data)[1]){
             
       }
 }    
+
+plot_nr = 10
+plot(sim_time, colSums(sim_results[plot_nr,,]), type="l", main=paste("ID:", input_data[plot_nr,]$Id_Inventari, ",",
+                                                                     "species:", input_data[plot_nr,]$Species))
