@@ -151,126 +151,78 @@ plot(degchange, type="l", col="darkgreen",
 lines(degchangecc, col="green")
 
 
+run_yasso_and_format
 
 
-
-#________________________________________________________________________________
+#______________________________________________________________________________
 # My data and code ####
 
+############################################################
+
+# My data and code ####
+library(Matrix)  # tai Matrix tms  
 library(dplyr)
 library(tidyr)
 
-
-source("y07_subroutine_01.r")
 Yasso07Parameters_load = read.csv("y07par_gui.csv")
 
-# simulation runs for long time to understand how long it takes to go to zero
-SimulationTime_load = seq(1:200)
+# Define number of simulation years
+simulation_years <- 18  # or whatever you set
 
-# Years of simulation
-j=100 # how many years
+# Then Year vector must be length 22 (0 to 21)
+Year_vector <- 0:(simulation_years +1)
+length(Year_vector)
 
-# Define model configs
-woody_configs <- list(
-      list(size = 0,   pool_col = "BR2_tha_diff"),
-      list(size = 4, pool_col = "BR2_7_tha_diff"),
-      list(size = 10,  pool_col = "BR7_tha_diff")
-)
+final_results <- list()
 
-LitterInput <- input_data[j, ]
-
-# Create an empty list to collect results
-results_list <- list()
-
-# Loop through each config
-for (cfg in woody_configs) {
-      for (i in seq(1,j, by=1)) { 
-            LitterInput <- rbind(LitterInput, c(0,0,0,0,0)) }
-                  
-                  # Get carbon pool input
-                  c_pool <- input_data[j, ][[cfg$pool_col]] * rep(0.2, 5)
-                  
-                  # Run the model
-                  out <- yasso07(
-                        MeanTemperature = input_data[j, ]$MeanTemp_avg,
-                        TemperatureAmplitude = input_data[j, ]$TempAmp_avg,
-                        Precipitation = input_data[j, ]$Precip_annual_avg,
-                        InitialCPool = c(0, 0, 0, 0, 0),
-                        LitterInput = input_data[j,]$BR2_tha_diff*c(0.2,0.2,0.2,0.2,0.2),
-                        WoodySize = cfg$size,
-                        Yasso07Parameters = Yasso07Parameters_load$value,
-                        SimulationTime = year
-                  )
-                  
-                  # Store results in long format
-                  results_list[[length(results_list) + 1]] <- data.frame(
-                        Id_Inventari = input_data[j, ]$Id_Inventari,
-                        Species = input_data[j, ]$Species,
-                        WoodySize = cfg$size,
-                        Year = year,
-                        C_A = out[1],
-                        C_W = out[2],
-                        C_E = out[3],
-                        C_N = out[4],
-                        C_H = out[5],
-                        TotalC = sum(out)
-                  )
-            }
+for (i in 1:nrow(input_data)) {
       
-
-# Combine all into a single data frame
-model_outputs <- bind_rows(results_list)
-
-print(paste("Woody Size (WS): ", cfg$size))
-
-
-#_____________#####
-
-
-# Number of years to simulate
-simulation_years <- 50
-
-# Create an empty list to store results
-results_list <- list()
-
-# Vector of wood sizes and corresponding column names
-wood_sizes <- list(
-      `0` = "BR2_tha_diff",
-      `4` = "BR2_7_tha_diff",
-      `10` = "BR7_tha_diff"
-)
-
-for (j in 1:nrow(input_data)) {
-      row_data <- input_data[j, ]
+      # Extract the row
+      row_data <- input_data[i, ]
       
-      for (ws_size in names(wood_sizes)) {
-            col_name <- wood_sizes[[ws_size]]
-            biomass <- row_data[[col_name]]
+      # Extract species and their Cpools
+      species_row <- unique_species %>% filter(Species == row_data$Species)
+      
+      # Loop through wood sizes (WS)
+      for (ws_size in c(0, 4, 10)) {
             
-            if (is.na(biomass)) next  # Skip if no biomass for this wood size
+            # Get column name for the current woody size
+            col_name <- case_when(
+                  ws_size == 0 ~ "BR2_tha_diff",
+                  ws_size == 4 ~ "BR2_7_tha_diff",
+                  ws_size == 10 ~ "BR7_tha_diff"
+            )
             
-            ws_size <- as.numeric(ws_size)
+            # Skip if column doesn't exist or value is NA
+            if (!col_name %in% colnames(row_data) || is.na(row_data[[col_name]])) next
             
-            # Get species-specific carbon shares for this wood size
-            species_row <- unique_species[
-                  unique_species$Species == row_data$Species & unique_species$WS == ws_size, 
-            ]
+            # Extract biomass input for this woody size
+            input_tha <- row_data[[col_name]]
             
-            if (nrow(species_row) == 0) next
+            # Get corresponding Cpools from species_row
+            cpool <- species_row %>% filter(WS == ws_size)
             
-            # Extract carbon share values
-            carbon_shares <- as.numeric(species_row[1, c("C1", "C2", "C3", "C4", "C5")])
+            # If no matching cpool, skip
+            if (nrow(cpool) == 0) next
             
-            # Build LitterInput: only year 0 has input
-            litter_input <- matrix(0, nrow = simulation_years +1, ncol = 5)
-            litter_input[1, ] <- biomass * carbon_shares
+            # Initialize litter input matrix with zeros
+            litter_input <- matrix(0, nrow = simulation_years + 1, ncol = 5)
             
-            # Climate variables
-            MeanTemperature <- rep(row_data$MeanTemp_avg, simulation_years)
-            TemperatureAmplitude <- rep(row_data$TempAmp_avg/2, simulation_years)
-            Precipitation <- rep(row_data$Precip_annual_avg, simulation_years)
+            # Fill only year 0 with calculated C pool inputs
+            litter_input[1, ] <- c(
+                  input_tha * cpool$C1,
+                  input_tha * cpool$C2,
+                  input_tha * cpool$C3,
+                  input_tha * cpool$C4,
+                  input_tha * cpool$C5
+            )
             
-            # Run the Yasso model
+            # Climate variables for each year
+            MeanTemperature <- rep(row_data$MeanTemp_avg, simulation_years + 1)
+            TemperatureAmplitude <- rep(row_data$TempAmp_avg / 2, simulation_years + 1)
+            Precipitation <- rep(row_data$Precip_annual_avg, simulation_years + 1)
+            
+            # Run Yasso07 model
             out <- yasso07(
                   MeanTemperature = MeanTemperature,
                   TemperatureAmplitude = TemperatureAmplitude,
@@ -281,63 +233,94 @@ for (j in 1:nrow(input_data)) {
                   Yasso07Parameters = Yasso07Parameters_load$value
             )
             
-            results_list[[length(results_list) + 1]] <- data.frame(
-                  Id_Inventari = rep(row_data$Id_Inventari, 51),
-                  Species = rep(row_data$Species, 51),
-                  WoodySize = rep(ws_size, 51),
-                  Year = 0:50,  # 21 years: 0 to 20
-                  C_A = out[, 1],
-                  C_W = out[, 2],
-                  C_E = out[, 3],
-                  C_N = out[, 4],
-                  C_H = out[, 5],
-                  TotalC = rowSums(out)
+            # Convert Yasso output to data frame and rename columns
+            out_df <- as.data.frame(out)
+            colnames(out_df) <- c("C_A", "C_W", "C_E", "C_N", "C_H")
+            
+            # Year 0 carbon stocks = initial litter input
+            year0 <- data.frame(
+                  C_A = litter_input[1, 1],
+                  C_W = litter_input[1, 2],
+                  C_E = litter_input[1, 3],
+                  C_N = litter_input[1, 4],
+                  C_H = litter_input[1, 5]
             )
             
+            # Combine year 0 with Yasso output (years 1 to N)
+            combined <- rbind(year0, out_df[-1, ])
+            
+            # Total carbon column
+            combined$TotalC <- rowSums(combined)
+            
+            # Create final result data frame with metadata
+            results <- data.frame(
+                  Id_Inventari = rep(row_data$Id_Inventari, length(Year_vector)),
+                  Species = rep(row_data$Species, length(Year_vector)),
+                  WoodySize = rep(ws_size, length(Year_vector)),
+                  Year = Year_vector +1,
+                  C_A = combined$C_A,
+                  C_W = combined$C_W,
+                  C_E = combined$C_E,
+                  C_N = combined$C_N,
+                  C_H = combined$C_H,
+                  TotalC = combined$TotalC,
+                  stringsAsFactors = FALSE
+            )
+            
+            # Append results to the list
+            final_results[[length(final_results) + 2]] <- results
       }
 }
 
+# Combine all results into one data frame
+final_output <- do.call(rbind, final_results)
 
-# Combine all into a single data frame
-model_outputs <- bind_rows(results_list)
+final_output <- final_output %>%
+      group_by(Id_Inventari, Species, WoodySize) %>%
+      mutate(
+            C_A_rel = C_A / first(C_A),
+            C_W_rel = C_W / first(C_W),
+            C_E_rel = C_E / first(C_E),
+            C_N_rel = C_N / first(C_N),
+            C_H_rel = C_H / first(C_H),
+            TotalC_rel = TotalC / first(TotalC)
+      ) %>%
+      ungroup()
 
-# Ploting results
 
-plot(rowSums(out), type="l", col="darkgreen", 
-     ylab="Carbon Mg/ha", xlab="Years", xlim=c(0,50), #ylim=c(0,60), 
-     bty="n")
+#______________________________________________________________________________
+# PLOTING RESULTS #####
 
-library(ggplot2)
-
-model_outputs %>%
+# General_________________________________________
+final_output %>%
       group_by(Year) %>%
       summarise(TotalCarbon = sum(TotalC, na.rm = TRUE)) %>%
       ggplot(aes(x = Year, y = TotalCarbon)) +
       geom_line(color = "darkgreen") +
-      labs(y = "Total Carbon Mg/ha", x = "Years") +
+      labs(y = "Total Carbon Mg/ha", x = "Years", title = 'MeanTemp +0ºC') +
+      coord_cartesian(ylim = c(0, NA)) +  # This preserves data outside the limits
       theme_minimal()
 
-model_outputs %>%
-  group_by(Year) %>%
-  summarise(
-    C_A = sum(C_A, na.rm = TRUE),
-    C_W = sum(C_W, na.rm = TRUE),
-    C_E = sum(C_E, na.rm = TRUE),
-    C_N = sum(C_N, na.rm = TRUE),
-    C_H = sum(C_H, na.rm = TRUE)
-  ) %>%
-  pivot_longer(cols = starts_with("C_"), names_to = "Pool", values_to = "Carbon") %>%
-  ggplot(aes(x = Year, y = Carbon, color = Pool)) +
-  geom_line() +
-  labs(y = "Carbon Mg/ha", x = "Years", color = "Pool") +
-  theme_minimal()
 
+# By C pool_______________________________________
+final_output %>%
+      group_by(Year) %>%
+      summarise(
+            C_A = sum(C_A, na.rm = TRUE),
+            C_W = sum(C_W, na.rm = TRUE),
+            C_E = sum(C_E, na.rm = TRUE),
+            C_N = sum(C_N, na.rm = TRUE),
+            C_H = sum(C_H, na.rm = TRUE)
+      ) %>%
+      pivot_longer(cols = starts_with("C_"), names_to = "Pool", values_to = "Carbon") %>%
+      ggplot(aes(x = Year, y = Carbon, color = Pool)) +
+      geom_line() +
+      labs(y = "Carbon Mg/ha", x = "Years", title = "MeanTemp 2.5ºC", color = "Pool") +
+      theme_minimal()
 
-library(patchwork)  # Install if needed: install.packages("patchwork")
-
-# Function to generate the plot for one species
+# Species P. hapensis and Q. ilex___________________
 plot_species_pools <- function(species_name) {
-      model_outputs %>%
+      final_output %>%
             filter(Species == species_name) %>%
             group_by(Year) %>%
             summarise(
@@ -353,11 +336,174 @@ plot_species_pools <- function(species_name) {
             geom_line() +
             labs(title = species_name, y = "Carbon Mg/ha", x = "Years", color = "Pool") +
             theme_minimal()
+            }
+
+         #Generate plots for both species
+      p1 <- plot_species_pools("Pinus halepensis")
+      p2 <- plot_species_pools("Quercus ilex")
+
+         #Combine in 2-row layout
+      p1 / p2
+
+#_____________________________________________________________________________
+# Scenarios
+      
+# Temperature_______________
+  # climate change + 2.5º C
+
+# Define number of simulation years
+simulation_years <- 49  # or whatever you set
+
+# Then Year vector must be length 22 (0 to 21)
+Year_vector <- 0:(simulation_years +1)
+length(Year_vector)
+      
+final_results <- list()
+
+for (i in 1:nrow(input_data)) {
+      
+      row_data <- input_data[i, ]
+      
+      # Filter species-specific Cpools
+      species_row <- unique_species %>% filter(Species == row_data$Species)
+      
+      for (ws_size in c(0, 4, 10)) {
+            
+            col_name <- case_when(
+                  ws_size == 0 ~ "BR2_tha_diff",
+                  ws_size == 4 ~ "BR2_7_tha_diff",
+                  ws_size == 10 ~ "BR7_tha_diff"
+            )
+            
+            if (!col_name %in% colnames(row_data) || is.na(row_data[[col_name]])) next
+            
+            input_tha <- row_data[[col_name]]
+            
+            cpool <- species_row %>% filter(WS == ws_size)
+            if (nrow(cpool) == 0) next
+            
+            litter_input <- matrix(0, nrow = simulation_years + 1, ncol = 5)
+            litter_input[1, ] <- c(
+                  input_tha * cpool$C1,
+                  input_tha * cpool$C2,
+                  input_tha * cpool$C3,
+                  input_tha * cpool$C4,
+                  input_tha * cpool$C5
+            )
+            
+            # Climate variables for both scenarios
+            MeanTemperature_base <- rep(row_data$MeanTemp_avg, simulation_years + 1)
+            MeanTemperature_cc <- MeanTemperature_base + 2.5
+            TemperatureAmplitude <- rep(row_data$TempAmp_avg / 2, simulation_years + 1)
+            Precipitation_base <- rep(row_data$Precip_annual_avg, simulation_years + 1)
+            Precipitation_cc <- Precipitation_base * 0.8
+            
+            # Function to run Yasso and return dataframe
+            run_yasso_and_format <- function(temp, precip, scenario_label) {
+                  out <- yasso07(
+                        MeanTemperature = temp,
+                        TemperatureAmplitude = TemperatureAmplitude,
+                        Precipitation = precip,
+                        InitialCPool = rep(0, 5),
+                        LitterInput = litter_input,
+                        WoodySize = ws_size,
+                        Yasso07Parameters = Yasso07Parameters_load$value
+                  )
+                  
+                  out_df <- as.data.frame(out)
+                  colnames(out_df) <- c("C_A", "C_W", "C_E", "C_N", "C_H")
+                  
+                  # Add Year 0 manually
+                  year0 <- data.frame(
+                        C_A = litter_input[1, 1],
+                        C_W = litter_input[1, 2],
+                        C_E = litter_input[1, 3],
+                        C_N = litter_input[1, 4],
+                        C_H = litter_input[1, 5]
+                  )
+                  combined <- rbind(year0, out_df[-1, ])
+                  combined$TotalC <- rowSums(combined)
+                  
+                  data.frame(
+                        Id_Inventari = rep(row_data$Id_Inventari, length(Year_vector)),
+                        Species = rep(row_data$Species, length(Year_vector)),
+                        WoodySize = rep(ws_size, length(Year_vector)),
+                        Year = Year_vector,
+                        C_A = combined$C_A,
+                        C_W = combined$C_W,
+                        C_E = combined$C_E,
+                        C_N = combined$C_N,
+                        C_H = combined$C_H,
+                        TotalC = combined$TotalC,
+                        Scenario = scenario_label,
+                        stringsAsFactors = FALSE
+                  )
+            }
+            
+            # Run both scenarios
+            res_base  <- run_yasso_and_format(MeanTemperature_base, Precipitation_base, "Baseline")
+            res_cc_t  <- run_yasso_and_format(MeanTemperature_cc, Precipitation_base, "CC_T2.5")
+            res_cc_p  <- run_yasso_and_format(MeanTemperature_base, Precipitation_cc, "CC_P0.8")
+            res_cc_tp <- run_yasso_and_format(MeanTemperature_cc, Precipitation_cc, "CC_T2.5_P0.8")
+            
+            # Append both to results
+            final_results[[length(final_results) + 1]] <- res_base
+            final_results[[length(final_results) + 1]] <- res_cc_t
+            final_results[[length(final_results) + 1]] <- res_cc_p
+            final_results[[length(final_results) + 1]] <- res_cc_tp
+      }
 }
 
-# Generate plots for both species
-p1 <- plot_species_pools("Pinus halepensis")
-p2 <- plot_species_pools("Quercus ilex")
+# Combine all results into one dataframe
+final_output <- bind_rows(final_results)
 
-# Combine in 2-row layout
-p1 / p2
+library(ggplot2)
+
+final_output %>%
+      group_by(Year, Scenario) %>%
+      summarise(TotalC = sum(TotalC, na.rm = TRUE), .groups = "drop") %>%
+      ggplot(aes(x = Year, y = TotalC, color = Scenario)) +
+      geom_line(size = 1) +
+      labs(
+            title = "Simulated Carbon Stocks under Climate Scenarios",
+            x = "Year",
+            y = "Total Carbon (Mg/ha)"
+      ) +
+      theme_minimal()
+
+# By C pool_______________________________________
+plot_pool_scenario <- function(scenario_label) {
+  final_output %>%
+    filter(Scenario == scenario_label) %>%
+    group_by(Year) %>%
+    summarise(
+      C_A = sum(C_A, na.rm = TRUE),
+      C_W = sum(C_W, na.rm = TRUE),
+      C_E = sum(C_E, na.rm = TRUE),
+      C_N = sum(C_N, na.rm = TRUE),
+      C_H = sum(C_H, na.rm = TRUE)
+    ) %>%
+    pivot_longer(cols = starts_with("C_"), names_to = "Pool", values_to = "Carbon") %>%
+    mutate(Pool = factor(Pool, levels = c("C_A", "C_W", "C_E", "C_N", "C_H"))) %>% 
+    ggplot(aes(x = Year, y = Carbon, color = Pool)) +
+    geom_line() +
+    labs(
+      title = paste("Carbon Pools -", scenario_label),
+      y = "Carbon Mg/ha",
+      x = "Years",
+      color = "Pool"
+    ) +
+    theme_minimal()
+}
+
+p1 <- plot_pool_scenario("Baseline")
+p2 <- plot_pool_scenario("CC_T2.5")
+p3 <- plot_pool_scenario("CC_P0.8")
+p4 <- plot_pool_scenario("CC_T2.5_P0.8")
+
+# Load the patchwork package
+library(patchwork)
+
+(p1 | p2) / (p3 | p4) + 
+      plot_layout(guides = "collect") & 
+      theme(legend.position = "bottom")
