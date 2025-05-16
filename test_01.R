@@ -1,15 +1,19 @@
-# 1) Input forest debris and residues
-# 2) Input climatic information (Mean, max and min temperature, Temp amplitude, and precipitation)
+#______________________________________________________________________________
+# Data input
+# Forest debris (t/ha per class, species and Id_Inventari)
+# Climatic Input (Mean, max and min temperature, Temp amplitude, and precipitation)
+# Stand characteristics (Area, Altitude, Type of management)
+
+
+library(readxl)  # to read Excel
+library(lubridate)  # to extract year and month from date
+library(dplyr)
+
 
 # Input Debris DB
 input_data <- readRDS("../../../2024/03_Forest_debris_decomposition/01_Std_Restes_CPF/DB_processades_rds/DB_debris_species.rds")
 input_data$Id_Inventari <- as.character(input_data$Id_Inventari)
 input_data$Species <- as.factor(input_data$Species)
-
-# Input climatic data
-library(readxl)  # to read Excel
-library(lubridate)  # to extract year and month from date
-library(dplyr)
 
 input_clima <- read_excel("../../../2024/Meteo/Historical_meteo/Historical_meteo.xlsx")
 
@@ -86,4 +90,21 @@ unique_species <- read_excel("../../../2025/Exchange period - Finland/YassoModel
 
 saveRDS(unique_species,"../../../2025/Exchange period - Finland/YassoModeling/unique_species.rds")
 saveRDS(input_data,"../../../2025/Exchange period - Finland/YassoModeling/input_data.rds")
+
+
+# Adding rodal information
+Rodal <- readRDS("../../../2025/Exchange period - Finland/YassoModeling/Rodal.rds")
+names(Rodal)
+unique(Rodal$Actuacio)
+
+Rodal <- Rodal %>%
+      mutate(Class_Actuacio = case_when(
+            Actuacio %in% c("Tallada disseminatoria", "Tallada preparatoria", "Tallada de regeneració") ~ "Regeneration",
+            Actuacio %in% c("Aclarida baixa", "Aclarida selectiva", "Tallada de selecció i aclarida baixa") ~ "Thinning",
+            Actuacio %in% c("Tallada de selecció", "Tallada de selecció per bosquets petits") ~ "Selective",
+            Actuacio %in% c("Estassada selectiva", "Selecció de tanys") ~ "Understory management",
+            Actuacio %in% c("Tallada arreu amb reserva d'arbres") ~ "Clearcut",
+            Actuacio %in% c("Tallada sanitaria", "Tallada sanitaria i selecció de tanys") ~ "Sanitation",
+            TRUE ~ "Other"
+      ))
 

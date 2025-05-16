@@ -167,7 +167,7 @@ library(patchwork)
 Yasso07Parameters_load = read.csv("y07par_gui.csv")
 
 # Define number of simulation years
-simulation_years <- 49  # or whatever you set
+simulation_years <- 29  # or whatever you set
 
 # Then Year vector must be length 22 (0 to 21)
 Year_vector <- 0:(simulation_years +1)
@@ -272,6 +272,56 @@ for (i in 1:nrow(input_data)) {
 # Combine all results into one dataframe
 final_output <- bind_rows(final_results)
 
+final_output <- final_output %>%
+      mutate(across(c(C_A, C_W, C_E, C_N, C_H, TotalC),
+                    ~ ifelse(. == 0, 1e-6, .)))
+
+
+
+
+
+final_output <- final_output %>%
+      group_by(Id_Inventari, WoodySize, Scenario, Species) %>%
+      mutate(
+            initial_sum = first(C_A + C_W + C_E + C_N + C_H),
+            
+            rel_C_A = if_else(initial_sum > 0.001, C_A / first(C_A), NA_real_),
+            rel_C_W = if_else(initial_sum > 0.001, C_W / first(C_W), NA_real_),
+            rel_C_E = if_else(initial_sum > 0.001, C_E / first(C_E), NA_real_),
+            rel_C_N = if_else(initial_sum > 0.001, C_N / first(C_N), NA_real_),
+            rel_C_H = if_else(initial_sum > 0.001, C_H / first(C_H), NA_real_),
+            rel_TotalC = if_else(initial_sum > 0.001, TotalC / first(TotalC), NA_real_)
+      ) %>%
+      select(-initial_sum) %>%
+      ungroup()
+
+
+
+
+
+
+
+
+
+
+
+
+final_output <- final_output %>%
+      group_by(Id_Inventari, WoodySize, Scenario, Species) %>%
+      mutate(
+            rel_C_A = C_A / first(C_A),
+            rel_C_W = C_W / first(C_W),
+            rel_C_E = C_E / first(C_E),
+            rel_C_N = C_N / first(C_N),
+            rel_C_H = C_H / first(C_H),
+            rel_TotalC = TotalC / first(TotalC)
+      ) %>%
+      ungroup()
+
+#_______________________________________________________________________________
+#  PLOTS #####
+
+##### Scenarios
 final_output %>%
       group_by(Year, Scenario) %>%
       summarise(TotalC = sum(TotalC, na.rm = TRUE), .groups = "drop") %>%
@@ -284,7 +334,9 @@ final_output %>%
       ) +
       theme_minimal()
 
-# By C pool_______________________________________
+##### By C pool_______________________________________
+
+##### By SCENARIO
 plot_pool_scenario <- function(scenario_label) {
   final_output %>%
     filter(Scenario == scenario_label) %>%
@@ -317,3 +369,148 @@ p4 <- plot_pool_scenario("CC_T2.5_P0.8")
 (p1 | p2) / (p3 | p4) + 
       plot_layout(guides = "collect") & 
       theme(legend.position = "bottom")
+
+##### By SPECIES
+plot_pool_species <- function(species_name) {
+      final_output %>%
+            filter(Species == species_name) %>%
+            group_by(Year) %>%
+            summarise(
+                  C_A = sum(C_A, na.rm = TRUE),
+                  C_W = sum(C_W, na.rm = TRUE),
+                  C_E = sum(C_E, na.rm = TRUE),
+                  C_N = sum(C_N, na.rm = TRUE),
+                  C_H = sum(C_H, na.rm = TRUE)
+            ) %>%
+            pivot_longer(cols = starts_with("C_"), names_to = "Pool", values_to = "Carbon") %>%
+            mutate(Pool = factor(Pool, levels = c("C_A", "C_W", "C_E", "C_N", "C_H"))) %>% 
+            ggplot(aes(x = Year, y = Carbon, color = Pool)) +
+            geom_line() +
+            labs(
+                  title = paste("Carbon Pools -", species_name),
+                  y = "Carbon Mg/ha",
+                  x = "Years",
+                  color = "Pool"
+            ) +
+            theme_minimal()
+}
+
+s1 <- plot_pool_species("Quercus ilex")
+s2 <- plot_pool_species("Pinus halepensis")
+s3 <- plot_pool_species("Quercus humilis")
+s4 <- plot_pool_species("Pinus nigra")
+
+(s1 | s2) / (s3 | s4) + 
+      plot_layout(guides = "collect") & 
+      theme(legend.position = "bottom")
+
+# Species AND WoodSize
+plot_pool_species <- function(species_name) {
+      final_output %>%
+            filter(Species == species_name) %>%
+            group_by(WoodySize, Year) %>%
+            summarise(mean_rel_TotalC = mean(rel_TotalC, na.rm = TRUE), .groups = "drop") %>%
+            ggplot(aes(x = Year, y = mean_rel_TotalC, color = factor(WoodySize))) +
+            geom_line() +
+            labs(
+                  title = paste("Debris Type -", species_name),
+                  y = "Remaining weight",
+                  x = "Years",
+                  color = "Debris Class"
+            ) +
+            theme_minimal()
+}
+
+s1 <- plot_pool_species("Quercus ilex")
+s2 <- plot_pool_species("Pinus halepensis")
+s3 <- plot_pool_species("Quercus humilis")
+s4 <- plot_pool_species("Pinus nigra")
+
+(s1 | s2) / (s3 | s4) + 
+      plot_layout(guides = "collect") & 
+      theme(legend.position = "bottom")
+
+# Boxplot
+final_output %>%
+      filter(Year == 30, 
+             rel_TotalC < 0.99,
+             Species %in% c("Quercus ilex", "Pinus halepensis", "Pinus nigra", "Quercus humilis", 
+                            "Quercus suber", "Pinus sylvestris")) %>%
+      ggplot(aes(x = Species, y = rel_TotalC * 100, fill = Species)) +
+      geom_boxplot(outlier.shape = NA, alpha = 0.6) +
+      geom_jitter(width = 0.2, alpha = 0.6, color = "black", size = 1.2) +
+      labs(
+            title = "% Mass Remaining - 30 Years",
+            y = "% Mass Remaining"
+      ) +
+      facet_wrap(~WoodySize) +
+      theme_minimal() +
+      theme(
+            legend.position = "bottom",
+            axis.text.x = element_blank()  # Hide species names on x-axis
+      )
+
+
+#______________________________________________________________________________
+# Adding Rodal information to the final output
+
+# Convert Rodal$Id_Inventari to character
+Rodal <- Rodal %>%
+      mutate(Id_Inventari = as.character(Id_Inventari))
+
+# Now do the join
+final_output <- final_output %>%
+      left_join(
+            Rodal %>% select(Id_Inventari, Alt, Class_Actuacio),
+            by = "Id_Inventari"
+      )
+#______________________________________________________________________________
+
+##### By ACTUACIO
+final_output %>%
+      group_by(Class_Actuacio, Year) %>%
+      summarise(mean_rel_TotalC = mean(rel_TotalC, na.rm = TRUE), .groups = "drop") %>%
+      ggplot(aes(x = Year, y = mean_rel_TotalC, color = Class_Actuacio)) +
+      geom_line() +
+      labs(
+            title = "Mean relative Total Carbon by Management",
+            y = "Mean Relative Total Carbon",
+            x = "Year"
+      ) +
+      theme_minimal()
+
+##### By CLASS OF DEBRIS
+final_output %>%
+      group_by(WoodySize, Year) %>%
+      summarise(mean_rel_TotalC = mean(rel_TotalC, na.rm = TRUE), .groups = "drop") %>%
+      ggplot(aes(x = Year, y = mean_rel_TotalC, color = factor(WoodySize))) +
+      geom_line() +
+      labs(
+            title = "Mean Relative Total Carbon by Debris Size",
+            y = "Mean Relative Total Carbon",
+            x = "Year",
+            color = "Woody Size"
+      ) +
+      theme_minimal()
+
+# Boxplot
+final_output %>%
+      filter(Year == 30, rel_TotalC < 0.99, !is.na(Alt)) %>%
+      mutate(Alt_class = case_when(
+            Alt < 300 ~ "<300 m",
+            Alt >= 300 & Alt <= 600 ~ "300–600 m",
+            Alt > 600 ~ ">600 m"
+      ),
+      Alt_class = factor(Alt_class, levels = c("<300 m", "300–600 m", ">600 m"))
+      ) %>%
+      ggplot(aes(x = Alt_class, y = rel_TotalC * 100, fill = Alt_class)) +
+      geom_boxplot(outlier.shape = NA, alpha = 0.6) +
+      geom_jitter(width = 0.2, alpha = 0.6, color = "black", size = 1.2) +
+      labs(
+            title = "% Mass Remaining After 30 Years by Debris Class",
+            x = "Altitude Class",
+            y = "% Mass Remaining"
+      ) +
+      facet_wrap(~WoodySize) +
+      theme_minimal() +
+      theme(legend.position = "none")
